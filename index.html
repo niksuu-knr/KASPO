@@ -2,7 +2,7 @@
 <html lang="fi">
 <head>
     <meta charset="UTF-8">
-    <title>Kassa2000 - Päivitetty Myyntipistejärjestelmä</title>
+    <title>Kassa2000 - Täydellinen Lahjakortti- ja Kampanjajärjestelmä</title>
     <style>
         :root {
             --bg-color: #d4d0c8;
@@ -14,6 +14,7 @@
             --border-dark: #808080;
             --row-select: #000080;
             --row-deleted: #800000;
+            --admin-select: #008080;
         }
 
         * { box-sizing: border-box; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
@@ -57,7 +58,6 @@
             border: 3px inset var(--border-dark);
             color: #000;
             overflow-y: auto;
-            position: relative;
         }
 
         .kuitti-table {
@@ -75,16 +75,13 @@
 
         .kuitti-table td { padding: 6px 5px; }
         .kuitti-rivi { cursor: pointer; }
-        .kuitti-rivi.valittu {
-            background-color: var(--row-select) !important;
-            color: white;
-        }
-        .kuitti-rivi.poistettu {
-            text-decoration: line-through;
-            color: var(--row-deleted);
-            opacity: 0.6;
-        }
-        .kuitti-rivi:nth-child(even):not(.valittu):not(.poistettu) { background-color: #f2f2f2; }
+        .kuitti-rivi.valittu { background-color: var(--row-select) !important; color: white; }
+        .kuitti-rivi.poistettu { text-decoration: line-through; color: var(--row-deleted); opacity: 0.5; }
+        
+        .kampanja-rivi-sub { color: #008000; font-style: italic; background-color: #f5fff5; font-size: 13px; }
+        .lahjakortti-rivi { color: #800080; background-color: #fff0ff; }
+
+        .kuitti-rivi:nth-child(even):not(.valittu):not(.poistettu):not(.kampanja-rivi-sub):not(.lahjakortti-rivi) { background-color: #f2f2f2; }
 
         .sivu-paneeli {
             grid-column: 2;
@@ -139,8 +136,6 @@
             color: #000;
             border: 3px inset var(--border-dark);
             padding: 5px;
-            font-family: monospace;
-            font-weight: bold;
         }
 
         .footer-bar {
@@ -158,278 +153,243 @@
 
         .modaalipaneeli {
             position: absolute;
-            top: 45px;
-            left: 15px;
-            right: 15px;
-            bottom: 50px;
+            top: 45px; left: 15px; right: 15px; bottom: 50px;
             background-color: var(--bg-color);
             border: 4px outset var(--border-light);
             z-index: 100;
             display: none;
-            grid-template-columns: 200px 1fr;
-            padding: 10px;
-            gap: 10px;
+            grid-template-columns: 220px 1fr;
+            padding: 10px; gap: 10px;
         }
 
         .modaali-valikko {
             background-color: #c0c0c0;
             border: 2px inset var(--border-dark);
-            display: flex;
-            flex-direction: column;
+            display: flex; flex-direction: column;
         }
 
         .valikko-nappi {
-            background: none;
-            border: none;
-            padding: 10px;
-            text-align: left;
-            font-size: 14px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--border-dark);
+            background: none; border: none; padding: 12px 10px;
+            text-align: left; font-size: 14px; color: black; font-weight: bold;
+            border-bottom: 1px solid var(--border-dark); cursor: pointer;
         }
-
-        .valikko-nappi.aktiivinen {
-            background-color: var(--row-select);
-            color: white;
-        }
+        .valikko-nappi.aktiivinen { background-color: var(--row-select); color: white; }
+        .valikko-nappi.fokus { border: 2px dashed #ff0000; }
 
         .modaali-sisalto {
-            background: white;
-            border: 2px inset var(--border-dark);
-            padding: 15px;
-            overflow-y: auto;
+            background: #fff; border: 2px inset var(--border-dark);
+            padding: 15px; overflow-y: auto; color: black;
+        }
+
+        table.data-taulukko { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        table.data-taulukko th, table.data-taulukko td { border: 1px solid #808080; padding: 6px; font-size: 12px; }
+        table.data-taulukko th { background-color: #c0c0c0; }
+        table.data-taulukko tr.valittu-admin-rivi { background-color: var(--admin-select) !important; color: white; }
+
+        .lomake-inline input, .lomake-inline select, .lomake-inline textarea { 
+            width: 100%; background: transparent; border: none; color: inherit; 
+            font-family: monospace; font-weight: bold; font-size: 12px; resize: none;
+        }
+        .lomake-inline input:focus, .lomake-inline select:focus, .lomake-inline textarea:focus { 
+            background: #fff; color: #000; outline: 2px solid #000; 
         }
 
         .tallennettu-ilmoitus {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: #008000;
-            color: white;
-            padding: 5px 10px;
-            border: 2px solid #fff;
-            display: none;
-            z-index: 200;
+            position: fixed; top: 10px; right: 10px; background: #008000; color: white;
+            padding: 5px 10px; border: 2px solid #fff; display: none; z-index: 200;
         }
-
-        table.data-taulukko {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        table.data-taulukko th, table.data-taulukko td {
-            border: 1px solid #808080;
-            padding: 5px;
-            font-size: 12px;
-        }
-        table.data-taulukko th { background-color: #e0e0e0; }
-
-        .lomake-ryhma { margin-bottom: 8px; }
-        .lomake-ryhma label { display: inline-block; width: 140px; font-size: 13px;}
-        .lomake-ryhma input, .lomake-ryhma select { width: 200px; padding: 2px; font-family: monospace;}
-        
-        .nappi {
-            background-color: #c0c0c0;
-            border: 2px outset #fff;
-            padding: 4px 10px;
-            cursor: pointer;
-        }
+        .ohjelaatikko { background: #f0f0f0; border: 1px dashed black; padding: 10px; font-size: 11px; margin-top: 10px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
 
-<div id="tallennettu-pilvi" class="tallennettu-ilmoitus">PILVITALLENNUS OK...</div>
+<div id="tallennettu-pilvi" class="tallennettu-ilmoitus">TALLENNETTU JÄRJESTELMÄÄN...</div>
 
 <div id="kassa-container">
-    
-    <!-- YLÄPALKKI -->
     <div class="header-bar">
         <div>KASSA 2000 - [KUITTI: <span id="globaali-kuitti-nro">001001</span>]</div>
         <div id="kassa-info-teksti">Sijainti: Helsinki Myymälä 1 | Kassa: 01</div>
         <div id="nykyinen-myyja">Myyjä: Ei sisäänkirjautunut</div>
     </div>
 
-    <!-- KUITTINÄYTTÖ -->
-    <div class="kuitti-pohja" id="kuitti-alue">
-        <table class="kuitti-table" id="kuitti-taulukko">
+    <div class="kuitti-pohja">
+        <table class="kuitti-table">
             <thead>
                 <tr>
                     <th style="width: 5%;">NRO</th>
-                    <th style="width: 45%;">TUOTENIMI</th>
-                    <th style="width: 15%;">KPL</th>
-                    <th style="width: 15%;">YKSIKKÖHINTA</th>
-                    <th style="width: 20%;">YHTEENSÄ</th>
+                    <th style="width: 55%;">TUOTEKOODI & TUOTENIMI</th>
+                    <th style="width: 10%;">KPL</th>
+                    <th style="width: 13%;">YKSIKKÖHINTA</th>
+                    <th style="width: 17%;">YHTEENSÄ</th>
                 </tr>
             </thead>
             <tbody id="kuitti-rivit"></tbody>
         </table>
     </div>
 
-    <!-- OIKEA SIVUPANEELI -->
     <div class="sivu-paneeli">
         <div class="asiakasnaytto">
             <div id="naytto-tila" class="naytto-pieni">TERVETULOA</div>
             <div id="naytto-summa" class="naytto-iso">0.00 EUR</div>
         </div>
-        <div class="info-laatikko" id="info-ruutu">
-            <strong>KASSAN TILA:</strong><br>
-            <span id="tila-teksti">KIRJAUDU SISÄÄN (Syötä myyjänumero)</span><br><br>
-            <strong>KUITTIYHTEENVETO:</strong><br>
+        <div class="info-laatikko">
+            <strong>KASSAN TILA:</strong><br><span id="tila-teksti">KIRJAUDU SISÄÄN</span><br><br>
+            <strong>YHTEENVETO:</strong><br>
             Välisumma: <span id="valisumma-kentta">0.00</span> €<br>
-            Alennukset: <span id="ale-kentta">0.00</span> €<br>
-            <hr>
-            <strong>MAKSETTU:</strong><br>
+            Alennukset: <span id="ale-kentta">0.00</span> €<br><hr>
             Käteinen: <span id="maks-kateinen">0.00</span> €<br>
             Kortti: <span id="maks-kortti">0.00</span> €<br>
-            Lahjakortti: <span id="maks-lahja">0.00</span> €<br>
-            <hr>
-            <strong>TAKASIN / VAIHTORAHAT:</strong><br>
-            <span id="vaihtoraha-kentta" style="font-size:18px; color:red;">0.00 €</span>
+            Lahjakortti: <span id="maks-lahjakortti">0.00</span> €<br><hr>
+            <strong>TAKASIN: <span id="vaihtoraha-kentta" style="color:red;">0.00 €</span></strong>
         </div>
     </div>
 
-    <!-- SYÖTTÖPUSKURI -->
     <div class="syotto-alue">
-        <div class="puskuri-label" id="puskuri-otsikko">SKANNAA TUOTE / SYÖTÄ KOMENTO:</div>
+        <div class="puskuri-label" id="puskuri-otsikko">SYÖTÄ MYYJÄNUMERO:</div>
         <input type="text" id="puskuri" class="puskuri-input" autocomplete="off" autofocus>
     </div>
 
-    <!-- ALAPALKKI -->
-    <div class="footer-bar">
-        <div><span class="avainohje">F1</span>Ohje</div>
+    <div class="footer-bar" id="alapalkki-ohje">
+        <div><span class="avainohje">F1</span>Luo Lahjakortti</div>
         <div><span class="avainohje">F2</span>Ulos</div>
         <div><span class="avainohje">F3</span>Palautus</div>
-        <div><span class="avainohje">F4</span>Hallinta</div>
+        <div><span class="avainohje">F4</span>Hallinta (Admin)</div>
         <div><span class="avainohje">F7</span>Käteinen Tasan</div>
-        <div><span class="avainohje">F8</span>Monimaksutapa</div>
-        <div><span class="avainohje">F9</span>Rivi-ale</div>
-        <div><span class="avainohje">F10</span>Kuitti-ale</div>
-        <div><span class="avainohje">↑↓</span>Selaa</div>
+        <div><span class="avainohje">F8</span>Maksutilaan</div>
         <div><span class="avainohje">Del</span>Yliviivaa rivi</div>
         <div><span class="avainohje">ESC</span>Peruuta</div>
     </div>
 </div>
 
-<!-- HALLINTAPANEELI OVERLAY (F4) -->
 <div id="hallinta-paneeli" class="modaalipaneeli">
-    <div class="modaali-valikko">
-        <button class="valikko-nappi aktiivinen" onclick="vaihdaHallintaVälilehti('tuotteet')">Tuotehallinta</button>
-        <button class="valikko-nappi" onclick="vaihdaHallintaVälilehti('myyjat')">Myyjät & Oikeudet</button>
-        <button class="valikko-nappi" onclick="vaihdaHallintaVälilehti('kampanjat')">Kampanjat & Kupongit</button>
-        <button class="valikko-nappi" onclick="vaihdaHallintaVälilehti('raportit')">Raportit (Z/X)</button>
-        <button class="valikko-nappi" onclick="vaihdaHallintaVälilehti('asetukset')">Asetukset</button>
-        <button class="valikko-nappi" style="margin-top:auto; background:#800000; color:white;" onclick="suljeHallinta()">SULJE (ESC)</button>
+    <div class="modaali-valikko" id="admin-vasen-valikko">
+        <button class="valikko-nappi" id="v-nappi-tuotteet">1. Tuotteet</button>
+        <button class="valikko-nappi" id="v-nappi-myyjat">2. Myyjät</button>
+        <button class="valikko-nappi" id="v-nappi-kampanjat">3. Kampanjat (RAJATON JS)</button>
+        <button class="valikko-nappi aktiivinen" id="v-nappi-asetukset">4. Asetukset & Lahjakortit</button>
+        <button class="valikko-nappi" id="v-nappi-raportit">5. Raportit</button>
     </div>
-    <div class="modaali-sisalto" id="hallinta-sisalto"></div>
+    <div class="modaali-sisalto" id="admin-oikea-sisalto"></div>
 </div>
 
 <script>
-    // --- JÄRJESTELMÄN ALUSTUS ---
-    const OLETUS_TUOTTEET = [
-        { koodi: "64100001", nimi: "Maito 1L", hinta: 1.45, aleHinta: 0, ryhma: "Maitotuotteet" },
-        { koodi: "64100002", nimi: "Ruisleipä", hinta: 2.80, aleHinta: 2.50, ryhma: "Leivät" },
-        { koodi: "64100003", nimi: "Kahvi 500g", hinta: 5.95, aleHinta: 0, ryhma: "Kuivatavarat" },
-        { koodi: "64100004", nimi: "Suklaalevy", hinta: 3.20, aleHinta: 0, ryhma: "Makeiset" }
-    ];
-
-    const OLETUS_MYYJAT = [
-        { nro: "1", nimi: "Kassapäällikkö Anna", taso: "Admin" },
-        { nro: "2", nimi: "Myyjä Pekka", taso: "Kassa" }
-    ];
-
+    // --- DATABASE ---
     let tietokanta = {
-        tuotteet: JSON.parse(localStorage.getItem("k_tuotteet")) || OLETUS_TUOTTEET,
-        myyjat: JSON.parse(localStorage.getItem("k_myyjat")) || OLETUS_MYYJAT,
-        kampanjat: JSON.parse(localStorage.getItem("k_kampanjat")) || [],
-        oikeudet: { "Admin": { asetukset: true }, "Kassa": { asetukset: false } },
-        asetukset: JSON.parse(localStorage.getItem("k_asetukset")) || { sijainti: "Helsinki Myymälä 1", kassaNro: "01", pohjakassa: 150.00, seuraavaKuitti: 1001 },
-        lahjakortit: JSON.parse(localStorage.getItem("k_lahjakortit")) || {},
-        myynnit: JSON.parse(localStorage.getItem("k_myynnit")) || []
+        tuotteet: JSON.parse(localStorage.getItem("k4_tuotteet")) || [
+            { koodi: "64100001", nimi: "Maito 1L", hinta: 1.45, ryhma: "Maitotuotteet" },
+            { koodi: "64100002", nimi: "Ruisleipä", hinta: 2.80, ryhma: "Leivät" },
+            { koodi: "64100003", nimi: "Kahvi 500g", hinta: 5.95, ryhma: "Kuivatavarat" }
+        ],
+        myyjat: JSON.parse(localStorage.getItem("k4_myyjat")) || [
+            { nro: "1", nimi: "Kauppias Anna", taso: "Admin" },
+            { nro: "2", nimi: "Myyjä Pekka", taso: "Kassa" }
+        ],
+        kampanjat: JSON.parse(localStorage.getItem("k4_kampanjat")) || [
+            { 
+                nimi: "Maito 3kpl Ota 3 Maksa 2", 
+                aktiivinen: true, 
+                koodi: `let maito = rivit.find(r => r.tuote.koodi === "64100001" && !r.poistettu && !r.palautussyy);\nif (maito && maito.kpl >= 3) {\n  let ilmKpl = Math.floor(maito.kpl / 3);\n  maito.alennukset.push({ kuvaus: "Ota 3 maksa 2 alennus", summa: -(ilmKpl * maito.tuote.hinta) });\n}`
+            }
+        ],
+        asetukset: JSON.parse(localStorage.getItem("k4_asetukset")) || { 
+            sijainti: "Helsinki Myymälä 1", 
+            kassaNro: "01", 
+            seuraavaKuitti: 1001, 
+            pohjakassa: 150.00,
+            seuraavaLahjakorttiNro: 20260001 // Juokseva puhdas numerosarja automaattiluontiin
+        },
+        myynnit: JSON.parse(localStorage.getItem("k4_myynnit")) || [],
+        lahjakortit: JSON.parse(localStorage.getItem("k4_lahjakortit")) || [] 
     };
 
     let nykyinenMyyja = null;
     let kuittiRivit = [];
     let valittuRiviIndeksi = -1;
-    let kassanTila = "KIRJAUDU"; 
+    let kassanTila = "KIRJAUDU";
     let maksutiedot = { käteinen: 0, kortti: 0, lahjakortti: 0 };
-    let aktiivinenKuponki = null;
+    let kaytetytLahjakortitTapahtumassa = []; // Seurataan mitä koodeja ajettu tähän kuittiin
     let palautussyyValittu = "";
-    let maksupaateKeskeytetty = false;
+
+    // Admin-tilat
+    let adminAuki = false;
+    let adminFokusAlue = "VALIKKO"; 
+    let adminAktiivinenVälilehti = "asetukset";
+    let adminValittuValikkoIndeksi = 3;
+    let adminValittuRiviIndeksi = -1;
 
     window.onload = function() {
-        paivitaKuittiNumeroNaytto();
-        vaihdaTila("KIRJAUDU");
+        paivitaKassaAsetukset();
         document.getElementById("puskuri").focus();
-        document.body.addEventListener("click", () => {
-            if(document.getElementById("hallinta-paneeli").style.display !== "grid") {
-                document.getElementById("puskuri").focus();
-            }
-        });
+        document.body.addEventListener("click", () => document.getElementById("puskuri").focus());
     };
 
     function pilviTallennus() {
-        localStorage.setItem("k_tuotteet", JSON.stringify(tietokanta.tuotteet));
-        localStorage.setItem("k_myyjat", JSON.stringify(tietokanta.myyjat));
-        localStorage.setItem("k_asetukset", JSON.stringify(tietokanta.asetukset));
-        localStorage.setItem("k_myynnit", JSON.stringify(tietokanta.myynnit));
+        localStorage.setItem("k4_tuotteet", JSON.stringify(tietokanta.tuotteet));
+        localStorage.setItem("k4_myyjat", JSON.stringify(tietokanta.myyjat));
+        localStorage.setItem("k4_kampanjat", JSON.stringify(tietokanta.campaigns || tietokanta.kampanjat));
+        localStorage.setItem("k4_asetukset", JSON.stringify(tietokanta.asetukset));
+        localStorage.setItem("k4_myynnit", JSON.stringify(tietokanta.myynnit));
+        localStorage.setItem("k4_lahjakortit", JSON.stringify(tietokanta.lahjakortit));
         let flash = document.getElementById("tallennettu-pilvi");
         flash.style.display = "block";
-        setTimeout(() => { flash.style.display = "none"; }, 800);
+        setTimeout(() => flash.style.display = "none", 500);
     }
 
-    function paivitaKuittiNumeroNaytto() {
-        let puskettuNro = String(tietokanta.asetukset.seuraavaKuitti).padStart(6, '0');
-        document.getElementById("globaali-kuitti-nro").innerText = puskettuNro;
+    function paivitaKassaAsetukset() {
+        document.getElementById("globaali-kuitti-nro").innerText = String(tietokanta.asetukset.seuraavaKuitti).padStart(6, '0');
+        document.getElementById("kassa-info-teksti").innerText = `Sijainti: ${tietokanta.asetukset.sijainti} | Kassa: ${tietokanta.asetukset.kassaNro}`;
     }
 
-    // --- NÄPPÄIMISTÖSEURANTA ---
+    // --- KEYBOARD LISTENER ---
     document.addEventListener("keydown", function(e) {
-        if(["F1", "F2", "F3", "F4", "F7", "F8", "F9", "F10", "Delete"].includes(e.key)) {
+        if(["F1", "F2", "F3", "F4", "F7", "F8", "Delete"].includes(e.key) && !adminAuki) {
             e.preventDefault();
         }
 
-        if(e.key === "Escape" && document.getElementById("hallinta-paneeli").style.display === "grid") {
-            suljeHallinta();
+        if(e.key === "F4") {
+            e.preventDefault();
+            if(!adminAuki) avaaAdminHallinta();
+            else suljeAdminHallinta();
             return;
         }
 
-        if(e.key === "F2") { kirjaaMyyjaUlos(); return; }
-        if(e.key === "F4") { avaaHallinta(); return; }
+        if(adminAuki) {
+            if (document.activeElement.tagName === "TEXTAREA" && ["ArrowUp", "ArrowDown", "Enter"].includes(e.key)) return; 
+            e.preventDefault();
+            kasitteleAdminNäppäimistö(e);
+            return;
+        }
 
         if(kassanTila === "KIRJAUDU") return;
-
-        if(e.key === "F3") {
-            vaihdaTila("PALAUTUS_SYY");
+        
+        // F1 - PIKANÄPPÄIN: LUO JA MYY LAHJAKORTTI AUTOMAATTISELLA NUMEROLLA
+        if(e.key === "F1" && (kassanTila === "MYYNTI" || kassanTila === "LAHJA_ARVO_SYOTTO")) {
+            vaihdaTila("LAHJA_ARVO_SYOTTO");
             return;
         }
 
-        // Rivin yliviivaus (Poisto)
+        if(e.key === "F2") { kirjaaUlos(); return; }
+        if(e.key === "F3") { vaihdaTila("PALAUTUS_SYY"); return; }
+        
         if(e.key === "Delete" && valittuRiviIndeksi > -1 && kassanTila === "MYYNTI") {
             kuittiRivit[valittuRiviIndeksi].poistettu = true;
-            kuittiRivit[valittuRiviIndeksi].yhteensa = 0; // Nollataan arvo tapahtumasta
             laskeKuittiYhteenveto();
-            return;
         }
 
         if(e.key === "ArrowDown" && kuittiRivit.length > 0) {
-            e.preventDefault();
             valittuRiviIndeksi = Math.min(kuittiRivit.length - 1, valittuRiviIndeksi + 1);
             paivitaKuittiNaytto();
         }
         if(e.key === "ArrowUp" && kuittiRivit.length > 0) {
-            e.preventDefault();
             valittuRiviIndeksi = Math.max(0, valittuRiviIndeksi - 1);
             paivitaKuittiNaytto();
         }
 
-        if(e.key === "F7" && kassanTila === "MYYNTI" && kuittiRivit.length > 0) { suoritaPikaKateisMaksu(); }
-        if(e.key === "F8" && kassanTila === "MYYNTI" && kuittiRivit.length > 0) { vaihdaTila("MAKSU"); }
+        if(e.key === "F7" && kassanTila === "MYYNTI" && kuittiRivit.length > 0) suoritaPikaKateis();
+        if(e.key === "F8" && kassanTila === "MYYNTI" && kuittiRivit.length > 0) vaihdaTila("MAKSU");
 
         if(e.key === "Escape") {
-            if(["MAKSU", "PALAUTUS_SYY", "PALAUTUS_SKANNAUS", "MAKSUPÄÄTE_ODOTUS"].includes(kassanTila)) {
-                if(kassanTila === "MAKSUPÄÄTE_ODOTUS") maksupaateKeskeytetty = true;
-                vaihdaTila("MYYNTI");
-            }
+            vaihdaTila("MYYNTI");
             document.getElementById("puskuri").value = "";
             laskeKuittiYhteenveto();
         }
@@ -439,268 +399,399 @@
         if (e.key === 'Enter') {
             let syote = this.value.trim();
             this.value = "";
-            if(syote === "") return;
-            kasittelePuskuriSyote(syote);
+            if(syote !== "") kasittelePuskuri(syote);
         }
     });
 
-    // --- PUSKURIN LOGIIKKA ---
-    function kasittelePuskuriSyote(syote) {
+    function kasittelePuskuri(syote) {
         if(kassanTila === "KIRJAUDU") {
-            let myyja = tietokanta.myyjat.find(m => m.nro === syote);
-            if(myyja) {
-                nykyinenMyyja = myyja;
-                document.getElementById("nykyinen-myyja").innerText = `Myyjä: ${myyja.nimi}`;
+            let m = tietokanta.myyjat.find(x => x.nro === syote);
+            if(m) {
+                nykyinenMyyja = m;
+                document.getElementById("nykyinen-myyja").innerText = `Myyjä: ${m.nimi}`;
                 vaihdaTila("MYYNTI");
-                nollaaMyynti();
-            } else {
-                vaihdaTila("KIRJAUDU");
+                nollaaKassaTapahtuma();
             }
+            return;
+        }
+        
+        // F1 Prosessi: Otetaan arvo vastaan ja generoidaan puhdas numerosarja
+        if(kassanTila === "LAHJA_ARVO_SYOTTO") {
+            let summa = parseFloat(syote) || 0;
+            if(summa > 0) {
+                let autoKoodi = String(tietokanta.asetukset.seuraavaLahjakorttiNro);
+                tietokanta.asetukset.seuraavaLahjakorttiNro += 1; // Päivitetään seuraava juokseva numero
+                lisaaLahjakorttiKuitille(autoKoodi, summa);
+            }
+            vaihdaTila("MYYNTI");
             return;
         }
 
         if(kassanTila === "PALAUTUS_SYY") {
-            // Valitaan palautussyy numerolla
             if(syote === "1") palautussyyValittu = "VAIHTO";
             else if(syote === "2") palautussyyValittu = "VIRHEOSTOS";
-            else if(syote === "3") palautussyyValittu = "VIALLINEN TUOTE";
             else return;
-
             vaihdaTila("PALAUTUS_SKANNAUS");
             return;
         }
-
         if(kassanTila === "PALAUTUS_SKANNAUS") {
-            // Jos syöte on numeerinen ja vastaa tehtyä kuittia
-            let vanhaMyynti = tietokanta.myynnit.find(m => String(m.kuittiNro) === syote);
-            if(vanhaMyynti) {
-                kuittiRivit = vanhaMyynti.rivit.filter(r => !r.poistettu).map(r => {
-                    let kopio = JSON.parse(JSON.stringify(r));
-                    kopio.kpl = -Math.abs(kopio.kpl);
-                    kopio.yhteensa = -Math.abs(kopio.yhteensa);
-                    kopio.palautussyy = palautussyyValittu;
-                    return kopio;
-                });
-                vaihdaTila("MYYNTI");
-                laskeKuittiYhteenveto();
-            } else {
-                // Skannataan yksittäinen tuote palautukseksi
-                let tuote = tietokanta.tuotteet.find(t => t.koodi === syote);
-                if(tuote) {
-                    kuittiRivit.push({
-                        tuote: {...tuote},
-                        kpl: -1,
-                        yhteensa: -(tuote.aleHinta > 0 ? tuote.aleHinta : tuote.hinta),
-                        palautussyy: palautussyyValittu,
-                        poistettu: false
-                    });
-                    vaihdaTila("MYYNTI");
-                    laskeKuittiYhteenveto();
-                }
-            }
+            let t = tietokanta.tuotteet.find(x => x.koodi === syote);
+            if(t) kuittiRivit.push({ tuote: {...t}, kpl: -1, palautussyy: palautussyyValittu, poistettu: false, alennukset: [], isLahjakortti: false });
+            vaihdaTila("MYYNTI");
+            laskeKuittiYhteenveto();
             return;
         }
-
         if(kassanTila === "MYYNTI") {
             if(syote.includes("*")) {
-                let osat = syote.split("*");
-                lisaaTuoteKuittiin(osat[1], parseFloat(osat[0]));
+                let p = syote.split("*");
+                lisaaTuote(p[1], parseFloat(p[0]));
             } else {
-                lisaaTuoteKuittiin(syote, 1);
+                lisaaTuote(syote, 1);
             }
         }
-
-        else if(kassanTila === "MAKSU") {
-            let tyyppi = syote.charAt(0).toUpperCase();
-            let arvo = syote.substring(1);
-
-            if(tyyppi === "K") {
-                maksutiedot.käteinen += parseFloat(arvo);
-                laskeKuittiYhteenveto();
-            } else if(tyyppi === "C" || syote.toUpperCase() === "C") {
-                // AKTIVOIDAAN ULKOINEN MAKSUPÄÄTEINTEGRAATIO
-                suoritaMaksupaateIntegraatio();
+        if(kassanTila === "MAKSU") {
+            if(syote.toUpperCase().startsWith("K")) {
+                maksutiedot.käteinen += parseFloat(syote.substring(1));
+            } else if(syote.toUpperCase() === "C") {
+                vaihdaTila("MAKSUPÄÄTE");
+                setTimeout(() => {
+                    let avoinna = laskeAvoinSumma();
+                    maksutiedot.kortti += avoinna;
+                    vaihdaTila("MAKSU");
+                    laskeKuittiYhteenveto();
+                }, 800);
+            } else {
+                // LAHJAKORTILLA MAKSAMINEN MAKSUTILASSA: Syötetään pelkkä lahjakortin numero
+                suoritaLahjakorttiMaksu(syote);
             }
-        }
-    }
-
-    // --- MAKSUPÄÄTEINTEGRAATIO (SIMULAATIO) ---
-    function suoritaMaksupaateIntegraatio() {
-        vaihdaTila("MAKSUPÄÄTE_ODOTUS");
-        maksupaateKeskeytetty = false;
-        let loppusumma = parseFloat(document.getElementById("valisumma-kentta").innerText);
-
-        let sekunnit = 0;
-        let integraatioInterval = setInterval(() => {
-            if(maksupaateKeskeytetty) {
-                clearInterval(integraatioInterval);
-                return;
-            }
-            sekunnit++;
-            document.getElementById("naytto-summa").innerText = "REK " + ".".repeat(sekunnit);
-            
-            if(sekunnit >= 3) { // 3 sekunnin kättelypäätös ulkoiselta laitteelta
-                clearInterval(integraatioInterval);
-                maksutiedot.kortti = loppusumma;
-                kassanTila = "MAKSU";
-                laskeKuittiYhteenveto();
-            }
-        }, 1000);
-    }
-
-    // --- KASSAN ALGORITMIT ---
-    function vaihdaTila(uusiTila) {
-        kassanTila = uusiTila;
-        let otsikko = document.getElementById("puskuri-otsikko");
-        let tilaTeksti = document.getElementById("tila-teksti");
-
-        if(uusiTila === "KIRJAUDU") {
-            otsikko.innerText = "SYÖTÄ MYYJÄNUMERO:";
-            tilaTeksti.innerText = "KIRJAUDU SISÄÄN JÄRJESTELMÄÄN";
-        } else if(uusiTila === "MYYNTI") {
-            otsikko.innerText = "SKANNAA TUOTE / KOMENTO:";
-            tilaTeksti.innerText = "MYYNTITILA - VAPAA";
-        } else if(uusiTila === "PALAUTUS_SYY") {
-            otsikko.innerText = "VALITSE PALAUTUKSEN SYY: [1] VAIHTO, [2] VIRHEOSTOS, [3] VIALLINEN TUOTE";
-            tilaTeksti.innerText = "PALAUTUS - SYYN VALINTA";
-        } else if(uusiTila === "PALAUTUS_SKANNAUS") {
-            otsikko.innerText = "SYÖTÄ PALAUTETTAVAN KUITIN NUMERO TAI SKANNAA TUOTE:";
-            tilaTeksti.innerText = "PALAUTUSTILA - ODOTTAA KOHDETTA (" + palautussyyValittu + ")";
-        } else if(uusiTila === "MAKSU") {
-            otsikko.innerText = "SYÖTÄ MAKSUTAPA: K[summa] = Käteinen, C = Kortti (Maksupääte)";
-            tilaTeksti.innerText = "MAKSUTILA - ODOTTAA SUORITUSTA";
-        } else if(uusiTila === "MAKSUPÄÄTE_ODOTUS") {
-            otsikko.innerText = "LÄHETETTY MAKSUPÄÄTTEELLE. ODOTETAAN ASIAKASTA... [ESC = PERUUTA]";
-            tilaTeksti.innerText = "INTEGRAATIO: ULKOINEN MAKSUPÄÄTE AKTIIVINEN";
-            document.getElementById("naytto-tila").innerText = "MAKSUPÄÄTE";
-            document.getElementById("naytto-summa").innerText = "ODOTTAA...";
+            laskeKuittiYhteenveto();
         }
     }
 
-    function lisaaTuoteKuittiin(koodi, kpl) {
-        let tuote = tietokanta.tuotteet.find(t => t.koodi === koodi);
-        if(!tuote) return;
+    function vaihdaTila(tila) {
+        kassanTila = tila;
+        let o = document.getElementById("puskuri-otsikko");
+        let t = document.getElementById("tila-teksti");
+        if(tila === "KIRJAUDU") { o.innerText = "SYÖTÄ MYYJÄNUMERO:"; t.innerText = "KIRJAUDU SISÄÄN"; }
+        else if(tila === "MYYNTI") { o.innerText = "SKANNAA TUOTE (F1 = Luo Lahjakortti, F8 = Maksamaan):"; t.innerText = "MYYNTITILA - VAPAA"; }
+        else if(tila === "LAHJA_ARVO_SYOTTO") { o.innerText = "SYÖTÄ LAHJAKORTIN EUROARVO JA PAINA ENTER:"; t.innerText = "LAHJAKORTIN LUONTI"; }
+        else if(tila === "PALAUTUS_SYY") { o.innerText = "VALITSE PALAUTUKSEN SYY: [1] VAIHTO, [2] VIRHEOSTOS"; t.innerText = "PALAUTUS - SYY"; }
+        else if(tila === "PALAUTUS_SKANNAUS") { o.innerText = "SKANNAA PALAUTETTAVA TUOTE:"; t.innerText = "PALAUTUS - SKANNAUS"; }
+        else if(tila === "MAKSU") { o.innerText = "MAKSU -> K[summa]=Käteinen, C=Kortti, [Numerosarja]=Lue Lahjakortti:"; t.innerText = "MAKSUTILA"; }
+        else if(tila === "MAKSUPÄÄTE") { o.innerText = "ODOTETAAN MAKSUPÄÄTETTÄ..."; t.innerText = "KORTTIMAKSU KÄYNNISSÄ"; }
+    }
 
-        let olemassaOleva = kuittiRivit.find(r => r.tuote.koodi === koodi && !r.poistettu);
-        if(olemassaOleva) {
-            olemassaOleva.kpl += kpl;
-        } else {
-            kuittiRivit.push({ tuote: {...tuote}, kpl: kpl, poistettu: false, yhteensa: 0 });
-        }
+    function lisaaTuote(koodi, kpl) {
+        let t = tietokanta.tuotteet.find(x => x.koodi === koodi);
+        if(!t) return;
+        let olemassa = kuittiRivit.find(x => x.tuote.koodi === koodi && !x.poistettu && !x.palautussyy && !x.isLahjakortti);
+        if(olemassa) olemassa.kpl += kpl;
+        else kuittiRivit.push({ tuote: {...t}, kpl: kpl, poistettu: false, yhteensa: 0, alennukset: [], isLahjakortti: false });
         valittuRiviIndeksi = kuittiRivit.length - 1;
         laskeKuittiYhteenveto();
     }
 
+    function lisaaLahjakorttiKuitille(koodi, summa) {
+        kuittiRivit.push({
+            tuote: { koodi: koodi, nimi: `LAHJAKORTTI nro ${koodi}`, hinta: summa },
+            kpl: 1,
+            poistettu: false,
+            yhteensa: summa,
+            alennukset: [],
+            isLahjakortti: true
+        });
+        valittuRiviIndeksi = kuittiRivit.length - 1;
+        laskeKuittiYhteenveto();
+    }
+
+    // --- LAHJAKORTILLA MAKSAMINEN LAITTEISTOSTA/SÄHKÖISESTI ---
+    function suoritaLahjakorttiMaksu(koodi) {
+        let lk = tietokanta.lahjakortit.find(x => x.koodi === koodi);
+        if(!lk) {
+            alert("Lahjakorttia koodilla " + koodi + " ei löydy järjestelmästä tai se on tyhjä.");
+            return;
+        }
+        if(lk.saldo <= 0) {
+            alert("Kyseisen lahjakortin saldo on käytetty loppuun (0.00 €).");
+            return;
+        }
+
+        let avoinna = laskeAvoinSumma();
+        if(avoinna <= 0) return;
+
+        let kaytettavaSumma = 0;
+
+        if(lk.saldo >= avoinna) {
+            // Kortilla on tarpeeksi tai enemmän rahaa kuin kuitin loppusumma
+            kaytettavaSumma = avoinna;
+        } else {
+            // Kortilla on vähemmän rahaa, ajetaan se tyhjäksi ja jätetään loppu muille maksutavoille
+            kaytettavaSumma = lk.saldo;
+            alert("Lahjakortin saldo (" + lk.saldo.toFixed(2) + "€) ei riitä kokonaan. Loppusumma jää muille maksutavoille.");
+        }
+
+        maksutiedot.lahjakortit = (maksutiedot.lahjakortit || 0) + kaytettavaSumma;
+        kaytetytLahjakortitTapahtumassa.push({ koodi: koodi, veloitus: kaytettavaSumma });
+    }
+
+    function laskeAvoinSumma() {
+        let loppusumma = 0;
+        kuittiRivit.forEach(r => {
+            if(!r.poistettu) loppusumma += r.yhteensa;
+        });
+        let maksettu = maksutiedot.käteinen + maksutiedot.kortti + (maksutiedot.lahjakortit || 0);
+        return Math.max(0, loppusumma - maksettu);
+    }
+
+    function ajaRajatonKampanjaMoottori() {
+        kuittiRivit.forEach(r => r.alennukset = []);
+        tietokanta.kampanjat.forEach(k => {
+            if(!k.aktiivinen) return;
+            try {
+                let kampanjaFunktio = new Function('rivit', k.koodi);
+                kampanjaFunktio(kuittiRivit);
+            } catch(v) {}
+        });
+    }
+
     function laskeKuittiYhteenveto() {
-        let valisumma = 0;
-        kuittiRivit.forEach(rivi => {
-            if(!rivi.poistettu) {
-                let hinta = rivi.tuote.aleHinta > 0 ? rivi.tuote.aleHinta : rivi.tuote.hinta;
-                rivi.yhteensa = rivi.kpl * hinta;
-                valisumma += rivi.yhteensa;
+        ajaRajatonKampanjaMoottori();
+
+        let loppusumma = 0;
+        let alennuksetYhteensa = 0;
+
+        kuittiRivit.forEach(r => {
+            if(!r.poistettu) {
+                let rivinAlennuksetSumma = r.alennukset.reduce((acc, curr) => acc + curr.summa, 0);
+                r.yhteensa = (r.kpl * r.tuote.hinta) + rivinAlennuksetSumma;
+                loppusumma += r.yhteensa;
+                alennuksetYhteensa += Math.abs(rivinAlennuksetSumma);
+            } else {
+                r.yhteensa = 0;
             }
         });
 
-        let maksettuYhteensa = maksutiedot.käteinen + maksutiedot.kortti + maksutiedot.lahjakortti;
-        let vaihtoraha = maksettuYhteensa - valisumma;
+        let lhMaksu = maksutiedot.lahjakortit || 0;
+        let maksettu = maksutiedot.käteinen + maksutiedot.kortti + lhMaksu;
+        let takaisin = maksettu - loppusumma;
 
-        document.getElementById("valisumma-kentta").innerText = valisumma.toFixed(2);
+        document.getElementById("valisumma-kentta").innerText = (loppusumma + alennuksetYhteensa).toFixed(2);
+        document.getElementById("ale-kentta").innerText = alennuksetYhteensa.toFixed(2);
         document.getElementById("maks-kateinen").innerText = maksutiedot.käteinen.toFixed(2);
         document.getElementById("maks-kortti").innerText = maksutiedot.kortti.toFixed(2);
+        document.getElementById("maks-lahjakortti").innerText = lhMaksu.toFixed(2);
         
-        if(vaihtoraha >= 0 && maksettuYhteensa > 0) {
-            document.getElementById("vaihtoraha-kentta").innerText = vaihtoraha.toFixed(2) + " €";
-            if(kassanTila === "MAKSU") paataOstostapahtuma(valisumma);
+        if(takaisin >= -0.001 && maksettu > 0) {
+            document.getElementById("vaihtoraha-kentta").innerText = takaisin.toFixed(2) + " €";
+            if(kassanTila === "MAKSU") päätäKuitti(loppusumma);
         } else {
-            document.getElementById("vaihtoraha-kentta").innerText = "UUPUU " + Math.abs(vaihtoraha).toFixed(2) + " €";
+            document.getElementById("vaihtoraha-kentta").innerText = "UUPUU " + Math.abs(takaisin).toFixed(2) + " €";
         }
-
+        
         paivitaKuittiNaytto();
-        if(kassanTila !== "MAKSUPÄÄTE_ODOTUS") {
-            document.getElementById("naytto-summa").innerText = valisumma.toFixed(2) + " EUR";
-            document.getElementById("naytto-tila").innerText = valisumma >= 0 ? "YHTEENSÄ" : "PALAUTUS";
-        }
+        document.getElementById("naytto-summa").innerText = loppusumma.toFixed(2) + " EUR";
     }
 
     function paivitaKuittiNaytto() {
-        let tbody = document.getElementById("kuitti-rivit");
-        tbody.innerHTML = "";
-        kuittiRivit.forEach((rivi, indeksi) => {
+        let b = document.getElementById("kuitti-rivit"); b.innerHTML = "";
+        
+        kuittiRivit.forEach((r, i) => {
             let tr = document.createElement("tr");
-            tr.className = "kuitti-rivi" + (indeksi === valittuRiviIndeksi ? " valittu" : "") + (rivi.poistettu ? " poistettu" : "");
-            tr.onclick = function() { valittuRiviIndeksi = indeksi; paivitaKuittiNaytto(); };
-
-            let hinta = rivi.tuote.aleHinta > 0 ? rivi.tuote.aleHinta : rivi.tuote.hinta;
-            let pSyyTeksti = rivi.palautussyy ? ` [${rivi.palautussyy}]` : "";
+            tr.className = "kuitti-rivi" + (i === valittuRiviIndeksi ? " valittu" : "") + (r.poistettu ? " poistettu" : "") + (r.isLahjakortti ? " lahjakortti-rivi" : "");
+            
+            let tuoteEsitys = r.isLahjakortti ? `[LAHJA] ${r.tuote.nimi}` : `[${r.tuote.koodi}] ${r.tuote.nimi}`;
+            if(r.palautussyy) tuoteEsitys += ` (${r.palautussyy})`;
 
             tr.innerHTML = `
-                <td>${indeksi + 1}</td>
-                <td>${rivi.tuote.nimi}${pSyyTeksti}</td>
-                <td>${rivi.kpl}</td>
-                <td>${hinta.toFixed(2)}</td>
-                <td>${rivi.yhteensa.toFixed(2)}</td>
+                <td>${i+1}</td>
+                <td>${tuoteEsitys}</td>
+                <td>${r.kpl}</td>
+                <td>${r.tuote.hinta.toFixed(2)}</td>
+                <td>${((r.kpl * r.tuote.hinta)).toFixed(2)}</td>
             `;
-            tbody.appendChild(tr);
+            b.appendChild(tr);
+
+            if(!r.poistettu && r.alennukset && r.alennukset.length > 0) {
+                r.alennukset.forEach(ale => {
+                    let subTr = document.createElement("tr");
+                    subTr.className = "kampanja-rivi-sub";
+                    subTr.innerHTML = `
+                        <td></td>
+                        <td style="padding-left: 20px;"> &gt;&gt; ${ale.kuvaus}</td>
+                        <td></td>
+                        <td>ALENNUS</td>
+                        <td style="color: green;">${ale.summa.toFixed(2)}</td>
+                    `;
+                    b.appendChild(subTr);
+                });
+            }
         });
     }
 
-    function suoritaPikaKateisMaksu() {
-        let loppusumma = parseFloat(document.getElementById("valisumma-kentta").innerText);
-        maksutiedot.käteinen = loppusumma;
-        kassanTila = "MAKSU";
-        laskeKuittiYhteenveto();
+    function suoritaPikaKateis() {
+        let avoinna = laskeAvoinSumma();
+        maksutiedot.käteinen += avoinna;
+        kassanTila = "MAKSU"; laskeKuittiYhteenveto();
     }
 
-    function paataOstostapahtuma(loppusumma) {
-        let tallennettavaKuitti = String(tietokanta.asetukset.seuraavaKuitti);
-        tietokanta.myynnit.push({
-            kuittiNro: tallennettavaKuitti,
-            pvm: new Date().toISOString(),
-            rivit: JSON.parse(JSON.stringify(kuittiRivit)),
-            summa: loppusumma
+    function päätäKuitti(loppusumma) {
+        // 1. Aktivoidaan uudet myydyt lahjakortit järjestelmään
+        kuittiRivit.forEach(r => {
+            if(r.isLahjakortti && !r.poistettu) {
+                tietokanta.lahjakortit.push({ koodi: r.tuote.koodi, saldo: r.tuote.hinta, luotu: new Date().toLocaleDateString() });
+            }
         });
+
+        // 2. Päivitetään käytettyjen lahjakorttien saldot kassan tietokantaan
+        kaytetytLahjakortitTapahtumassa.forEach(kaytetty => {
+            let dbKortti = tietokanta.lahjakortit.find(x => x.koodi === kaytetty.koodi);
+            if(dbKortti) {
+                dbKortti.saldo = Math.max(0, dbKortti.saldo - kaytetty.veloitus);
+            }
+        });
+
+        tietokanta.myynnit.push({ kuittiNro: String(tietokanta.asetukset.seuraavaKuitti), rvit: JSON.parse(JSON.stringify(kuittiRivit)), summa: loppusumma });
+        tietokanta.asetukset.seuraavaKuitti = parseInt(tietokanta.asetukset.seuraavaKuitti) + 1;
         
-        tietokanta.asetukset.seuraavaKuitti += 1;
-        pilviTallennus();
-        paivitaKuittiNumeroNaytto();
-
-        setTimeout(() => {
-            nollaaMyynti();
-            vaihdaTila("MYYNTI");
-        }, 1500);
+        pilviTallennus(); paivitaKassaAsetukset();
+        setTimeout(() => { nollaaKassaTapahtuma(); vaihdaTila("MYYNTI"); }, 1000);
     }
 
-    function nollaaMyynti() {
-        kuittiRivit = [];
-        valittuRiviIndeksi = -1;
-        maksutiedot = { käteinen: 0, kortti: 0, lahjakortti: 0 };
-        laskeKuittiYhteenveto();
+    function nollaaKassaTapahtuma() { 
+        kuittiRivit = []; 
+        valittuRiviIndeksi = -1; 
+        maksutiedot = { käteinen: 0, kortti: 0, lahjakortti: 0 }; 
+        kaytetytLahjakortitTapahtumassa = [];
+        laskeKuittiYhteenveto(); 
     }
+    
+    function kirjaaUlos() { nykyinenMyyja = null; document.getElementById("nykyinen-myyja").innerText = "Ei sisäänkirjautunut"; vaihdaTila("KIRJAUDU"); nollaaKassaTapahtuma(); }
 
-    function kirjaaMyyjaUlos() {
-        nykyinenMyyja = null;
-        document.getElementById("nykyinen-myyja").innerText = "Myyjä: Ei sisäänkirjautunut";
-        vaihdaTila("KIRJAUDU");
-        nollaaMyynti();
-    }
-
-    function avaaHallinta() {
+    // =========================================================================
+    // --- ADMIN HALLINTA ---
+    // =========================================================================
+    function avaaAdminHallinta() {
+        if(!nykyinenMyyja || nykyinenMyyja.taso !== "Admin") return;
+        adminAuki = true; adminFokusAlue = "VALIKKO"; adminValittuValikkoIndeksi = 3; adminAktiivinenVälilehti = "asetukset"; adminValittuRiviIndeksi = -1;
         document.getElementById("hallinta-paneeli").style.display = "grid";
-        vaihdaHallintaVälilehti("tuotteet");
+        paivitaAdminAlapalkkiOhje(); renderöiAdminNäkymä();
     }
 
-    function suljeHallinta() {
-        document.getElementById("hallinta-paneeli").style.display = "none";
-        document.getElementById("puskuri").focus();
+    function suljeAdminHallinta() {
+        adminAuki = false; document.getElementById("hallinta-paneeli").style.display = "none";
+        vaihdaTila(kassanTila); paivitaKassaAsetukset();
     }
 
-    function vaihdaHallintaVälilehti(v_lehti) {
-        let sisalto = document.getElementById("hallinta-sisalto");
-        if(v_lehti === "tuotteet") {
-            let tRivit = tietokanta.tuotteet.map(t => `<tr><td>${t.koodi}</td><td>${t.nimi}</td><td>${t.hinta.toFixed(2)} €</td><td>${t.ryhma}</td></tr>`).join("");
-            sisalto.innerHTML = `<h3>TUOTEHALLINTA</h3><table class="data-taulukko"><thead><tr><th>Koodi</th><th>Nimi</th><th>Hinta</th><th>Ryhmä</th></tr></thead><tbody>${tRivit}</tbody></table>`;
+    function paivitaAdminAlapalkkiOhje() {
+        let p = document.getElementById("alapalkki-ohje");
+        if(adminFokusAlue === "VALIKKO") {
+            p.innerHTML = `<div><span class="avainohje">↑↓</span>Valikko</div><div><span class="avainohje">Tab</span>Siirry taulukkoon</div><div><span class="avainohje">ESC</span>Sulje</div>`;
         } else {
-            sisalto.innerHTML = `<h3>HALLINTAPANEELI</h3><p>Valitse toiminto vasemmalta.</p>`;
+            p.innerHTML = `<div><span class="avainohje">↑↓</span>Rivit</div><div><span class="avainohje">Ins</span>Uusi kohde</div><div><span class="avainohje">Del</span>Poista kohde</div><div><span class="avainohje">Tab</span>Takaisin valikkoon</div>`;
+        }
+    }
+
+    function kasitteleAdminNäppäimistö(e) {
+        let valikot = ["tuotteet", "myyjat", "kampanjat", "asetukset", "raportit"];
+        if(e.key === "Escape") { suljeAdminHallinta(); return; }
+        
+        if(e.key === "Tab") {
+            adminFokusAlue = (adminFokusAlue === "VALIKKO") ? "TAULUKKO" : "VALIKKO";
+            if(adminFokusAlue === "TAULUKKO" && adminValittuRiviIndeksi === -1) adminValittuRiviIndeksi = 0;
+            paivitaAdminAlapalkkiOhje(); renderöiAdminNäkymä(); return;
+        }
+
+        if(adminFokusAlue === "VALIKKO") {
+            if(e.key === "ArrowDown") {
+                adminValittuValikkoIndeksi = Math.min(valikot.length - 1, adminValittuValikkoIndeksi + 1);
+                adminAktiivinenVälilehti = valikot[adminValittuValikkoIndeksi]; adminValittuRiviIndeksi = -1; renderöiAdminNäkymä();
+            }
+            if(e.key === "ArrowUp") {
+                adminValittuValikkoIndeksi = Math.max(0, adminValittuValikkoIndeksi - 1);
+                adminAktiivinenVälilehti = valikot[adminValittuValikkoIndeksi]; adminValittuRiviIndeksi = -1; renderöiAdminNäkymä();
+            }
+        } else {
+            let lista = (adminAktiivinenVälilehti === "asetukset" || adminAktiivinenVälilehti === "raportit") ? [1] : tietokanta[adminAktiivinenVälilehti];
+            if(e.key === "ArrowDown" && document.activeElement.tagName !== "TEXTAREA") { adminValittuRiviIndeksi = Math.min(lista.length - 1, adminValittuRiviIndeksi + 1); renderöiAdminNäkymä(); }
+            if(e.key === "ArrowUp" && document.activeElement.tagName !== "TEXTAREA") { adminValittuRiviIndeksi = Math.max(0, adminValittuRiviIndeksi - 1); renderöiAdminNäkymä(); }
+
+            if(e.key === "Delete" && adminValittuRiviIndeksi > -1 && !["asetukset","raportit"].includes(adminAktiivinenVälilehti)) {
+                tietokanta[adminAktiivinenVälilehti].splice(adminValittuRiviIndeksi, 1);
+                adminValittuRiviIndeksi = Math.max(0, adminValittuRiviIndeksi - 1); pilviTallennus(); renderöiAdminNäkymä();
+            }
+
+            if(e.key === "Insert" && !["asetukset","raportit"].includes(adminAktiivinenVälilehti)) {
+                if(adminAktiivinenVälilehti === "tuotteet") tietokanta.tuotteet.push({ koodi: "UUSI", nimi: "Uusi Tuote", hinta: 1.00, ryhma: "Yleinen" });
+                if(adminAktiivinenVälilehti === "myyjat") tietokanta.myyjat.push({ nro: String(tietokanta.myyjat.length+1), nimi: "Uusi", taso: "Kassa" });
+                pilviTallennus(); renderöiAdminNäkymä();
+            }
+        }
+    }
+
+    function inlineMuutos(taulu, indeksi, kentta, arvo) {
+        if(taulu === 'asetukset') {
+            if(['pohjakassa','seuraavaKuitti','seuraavaLahjakorttiNro'].includes(kentta)) tietokanta.asetukset[kentta] = parseFloat(arvo) || 0;
+            else tietokanta.asetukset[kentta] = arvo;
+        } else {
+            if(['hinta'].includes(kentta)) tietokanta[taulu][indeksi][kentta] = parseFloat(arvo) || 0;
+            else if(kentta === 'aktiivinen') tietokanta[taulu][indeksi][kentta] = (arvo === 'true');
+            else tietokanta[taulu][indeksi][kentta] = arvo;
+        }
+        pilviTallennus();
+    }
+
+    function renderöiAdminNäkymä() {
+        let valikot = ["tuotteet", "myyjat", "kampanjat", "asetukset", "raportit"];
+        valikot.forEach((v, idx) => {
+            let n = document.getElementById("v-nappi-" + v);
+            n.className = "valikko-nappi" + (v === adminAktiivinenVälilehti ? " aktiivinen" : "");
+            if(adminFokusAlue === "VALIKKO" && idx === adminValittuValikkoIndeksi) n.className += " fokus";
+        });
+
+        let s = document.getElementById("admin-oikea-sisalto");
+
+        if(adminAktiivinenVälilehti === "tuotteet") {
+            let trs = tietokanta.tuotteet.map((t, i) => `<tr class="${i === adminValittuRiviIndeksi && adminFokusAlue === 'TAULUKKO' ? 'valittu-admin-rivi' : ''}"><td class="lomake-inline"><input value="${t.koodi}" oninput="inlineMuutos('tuotteet',${i},'koodi',this.value)"></td><td class="lomake-inline"><input value="${t.nimi}" oninput="inlineMuutos('tuotteet',${i},'nimi',this.value)"></td><td class="lomake-inline"><input type="number" step="0.01" value="${t.hinta}" oninput="inlineMuutos('tuotteet',${i},'hinta',this.value)"></td><td class="lomake-inline"><input value="${t.ryhma}" oninput="inlineMuutos('tuotteet',${i},'ryhma',this.value)"></td></tr>`).join("");
+            s.innerHTML = `<h3>TUOTEHALLINTA</h3><table class="data-taulukko"><thead><tr><th>Koodi / Viivakoodi</th><th>Nimi</th><th>Hinta (€)</th><th>Ryhmä</th></tr></thead><tbody>${trs}</tbody></table>`;
+        }
+
+        if(adminAktiivinenVälilehti === "kampanjat") {
+            let trs = tietokanta.kampanjat.map((k, i) => `<tr><td class="lomake-inline"><input value="${k.nimi}" oninput="inlineMuutos('kampanjat',${i},'nimi',this.value)"></td><td class="lomake-inline"><textarea rows="3" oninput="inlineMuutos('kampanjat',${i},'koodi',this.value)">${k.koodi}</textarea></td></tr>`).join("");
+            s.innerHTML = `<h3>KAMPANJAT</h3><table class="data-taulukko"><thead><tr><th>Nimi</th><th>JS Koodi</th></tr></thead><tbody>${trs}</tbody></table>`;
+        }
+
+        if(adminAktiivinenVälilehti === "asetukset") {
+            let a = tietokanta.asetukset;
+            s.innerHTML = `
+                <h3>JÄRJESTELMÄASETUKSET & LAHJAKORTTIKANNAN TILA</h3>
+                <table class="data-taulukko">
+                    <tr><th>Asetusnimi</th><th>Arvo / Syöte</th></tr>
+                    <tr><td>Myymälän sijainti</td><td class="lomake-inline"><input value="${a.sijainti}" oninput="inlineMuutos('asetukset',0,'sijainti',this.value)"></td></tr>
+                    <tr><td>Seuraavan Lahjakortin Nro (Juokseva puhdas numero)</td><td class="lomake-inline"><input type="number" value="${a.seuraavaLahjakorttiNro}" oninput="inlineMuutos('asetukset',0,'seuraavaLahjakorttiNro',this.value)"></td></tr>
+                    <tr><td>Seuraava Kuitti</td><td class="lomake-inline"><input type="number" value="${a.seuraavaKuitti}" oninput="inlineMuutos('asetukset',0,'seuraavaKuitti',this.value)"></td></tr>
+                </table>
+                <h4>AKTIIVISET/MYYDYT LAHJAKORTIT JÄRJESTELMÄSSÄ JA SALDOT:</h4>
+                <table class="data-taulukko" style="font-size:11px;">
+                    <thead><tr><th>Lahjakortin koodi (Numeerinen)</th><th>Jäljellä oleva saldo (€)</th><th>Luontipäivä</th></tr></thead>
+                    <tbody>
+                        ${tietokanta.lahjakortit.length === 0 ? '<tr><td colspan="3">Ei vielä myytyjä kortteja kannassa.</td></tr>' : tietokanta.lahjakortit.map(l => `<tr><td><b>${l.koodi}</b></td><td style="color:${l.saldo>0?'blue':'red'};">${l.saldo.toFixed(2)} €</td><td>${l.luotu}</td></tr>`).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        if(adminAktiivinenVälilehti === "myyjat") {
+            let trs = tietokanta.myyjat.map((m, i) => `<tr><td>${m.nro}</td><td>${m.nimi}</td><td>${m.taso}</td></tr>`).join("");
+            s.innerHTML = `<h3>MYYJÄT</h3><table class="data-taulukko"><thead><tr><th>Nro</th><th>Nimi</th><th>Taso</th></tr></thead><tbody>${trs}</tbody></table>`;
+        }
+
+        if(adminAktiivinenVälilehti === "raportit") {
+            let y = tietokanta.myynnit.reduce((acc, curr) => acc + curr.summa, 0);
+            s.innerHTML = `<h3>KASSARAPORTTI X</h3><p>Kassan kokonaismyynti: ${y.toFixed(2)} €</p>`;
+        }
+
+        if(adminFokusAlue === "TAULUKKO" && adminValittuRiviIndeksi > -1) {
+            let tr = s.querySelector(`tbody tr:nth-child(${adminValittuRiviIndeksi + 1})`);
+            if(tr) { let inp = tr.querySelector("input, select, textarea"); if(inp) inp.focus(); }
         }
     }
 </script>
