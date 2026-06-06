@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <title>Älykäs ProKassa HTML5</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --accent-color: #00adb5;
+            --text-color: #eeeeee;
+            --text-muted: #888888;
+            --row-select: #2a3a40;
+            --border-color: #333333;
+            --success: #393e46;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
+        body { background-color: var(--bg-color); color: var(--text-color); padding: 10px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Yläpalkki */
+        header { display: flex; justify-content: space-between; background: var(--panel-bg); padding: 10px; border-bottom: 2px solid var(--accent-color); font-size: 14px; }
+        .status-item { margin-right: 20px; }
+
+        /* Pääalue */
+        .main-container { display: flex; flex: 1; overflow: hidden; margin-top: 10px; gap: 10px; }
+        
+        /* Kuittiosio (Vasen) */
+        .receipt-section { flex: 3; background: var(--panel-bg); display: flex; flex-direction: column; border: 1px solid var(--border-color); }
+        .receipt-header { display: grid; grid-template-columns: 40px 1fr 80px 80px 10px 100px; padding: 10px; background: #252525; font-weight: bold; border-bottom: 1px solid var(--border-color); }
+        .receipt-rows { flex: 1; overflow-y: auto; }
+        .receipt-row { display: grid; grid-template-columns: 40px 1fr 80px 80px 10px 100px; padding: 10px; border-bottom: 1px solid #252525; cursor: pointer; }
+        .receipt-row.selected { background-color: var(--row-select); border-left: 4px solid var(--accent-color); }
+
+        /* Oikea paneeli (Yhteenveto, Puskuri, Ohjeet) */
+        .side-section { flex: 2; display: flex; flex-direction: column; gap: 10px; }
+        .totals-panel { background: var(--panel-bg); padding: 20px; border: 1px solid var(--border-color); text-align: right; }
+        .total-big { font-size: 48px; font-weight: bold; color: var(--accent-color); }
+        
+        /* Älykäs syöttöpuskuri */
+        .input-panel { background: #000; padding: 15px; border: 2px solid var(--accent-color); }
+        .buffer-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; }
+        #buffer-input { width: 100%; background: transparent; border: none; color: #fff; font-size: 28px; outline: none; font-family: monospace; }
+
+        /* Alapaneelit / Asetukset inline */
+        .sub-panel { background: var(--panel-bg); padding: 15px; border: 1px solid var(--border-color); flex: 1; overflow-y: auto; font-size: 12px; }
+        .hidden { display: none !important; }
+        
+        /* Taulukot asetuksille */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 6px; border: 1px solid var(--border-color); }
+        th { background: #252525; }
+
+        /* Pikanäppäinpalkki alhaalla */
+        footer { background: var(--panel-bg); padding: 5px 10px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--border-color); margin-top: 10px; color: var(--text-muted); }
+        .key { color: var(--accent-color); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <span class="status-item">KASSA: <strong id="info-pos">Kassa 1</strong></span>
+            <span class="status-item">SIJAINTI: <strong id="info-loc">Helsinki Päämyymälä</strong></span>
+            <span class="status-item">MYYJÄ: <strong id="info-user">Kirjaudu sisään (F1)</strong></span>
+        </div>
+        <div>
+            <span id="info-mode" style="color:var(--accent-color); font-weight:bold;">REKISTERÖINTI</span>
+        </div>
+    </header>
+
+    <div class="main-container">
+        
+        <div class="receipt-section">
+            <div class="receipt-header">
+                <div>KPL</div><div>TUOTE</div><div>YKSIKKÖ</div><div>ALE</div><div></div><div>YHTEENSÄ</div>
+            </div>
+            <div class="receipt-rows" id="receipt-items">
+                </div>
+        </div>
+
+        <div class="side-section">
+            <div class="totals-panel">
+                <div style="font-size: 14px; color: var(--text-muted);">MAKSETTAVAA</div>
+                <div class="total-big" id="disp-total">0.00 €</div>
+                <div style="font-size: 12px;" id="disp-subtotals">
+                    Rivirajat: 0.00 € | Kokoale: <span id="disp-cart-discount">0</span>%
+                </div>
+                <div id="disp-payments" style="margin-top:10px; font-size:14px; color:#00ffcc;"></div>
+            </div>
+
+            <div class="input-panel">
+                <div class="buffer-label" id="buffer-type">Syöte (Viivakoodi / hinta / määrä / komento)</div>
+                <input type="text" id="buffer-input" autocomplete="off" autofocus>
+            </div>
+
+            <div id="panel-help" class="sub-panel">
+                <h3>PIKAOHJEET & KOMENNOT PUSKURIIN:</h3>
+                <p>Kirjoita puskuriin ja paina enter tai käytä pikanäppäimiä:</p>
+                <ul>
+                    <li>Tuote viivakoodilla: Syötä koodi suoraan (esim. <kbd>12345</kbd>)</li>
+                    <li>Määrä etukäteen: <kbd>*</kbd> merkillä, esim: <kbd>5*12345</kbd> (5 kpl tuotetta)</li>
+                    <li>Maksut: <kbd>KÄTEINEN</kbd> -> <kbd>50</kbd> + <kbd>F12</kbd> | <kbd>KORTTI</kbd> -> <kbd>F11</kbd> | <kbd>LAHJAKORTTI</kbd> -> koodi + <kbd>F10</kbd></li>
+                    <li>Kokoale: Kirjoita puskuriin esim. <kbd>10</kbd> ja paina <kbd>ALT+D</kbd></li>
+                </ul>
+            </div>
+
+            <div id="panel-products" class="sub-panel hidden">
+                <h3>TUOTEHALLINTA (Selailu)</h3>
+                <table id="table-products">
+                    <thead><tr><th>Koodi</th><th>Nimi</th><th>Hinta</th><th>Ale %</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div id="panel-report" class="sub-panel hidden">
+                <h3>RAPORTTI (X / Z)</h3>
+                <pre id="report-text"></pre>
+            </div>
+            
+            <div id="panel-users" class="sub-panel hidden">
+                <h3>KÄYTTÄJÄTASOT & OIKEUDET</h3>
+                <table>
+                    <thead><tr><th>Taso</th><th>Myynti</th><th>Hinnanmuutos</th><th>Raportit</th></tr></thead>
+                    <tbody>
+                        <tr><td>Mekaanikko/Myyjä</td><td>Kyllä</td><td>Ei</td><td>Ei</td></tr>
+                        <tr><td>Manageri</td><td>Kyllä</td><td>Kyllä</td><td>Kyllä</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+    <footer>
+        <div><span class="key">F1</span> Kirjaudu sisään/ulos</div>
+        <div><span class="key">F2</span> Muuta kpl-määrää</div>
+        <div><span class="key">F3</span> Muuta yksikköhintaa</div>
+        <div><span class="key">F4</span> Tuoterivi-ale</div>
+        <div><span class="key">ALT+D</span> Kokoale %</div>
+        <div><span class="key">F7</span> Pohjakassa</div>
+        <div><span class="key">F8</span> X-Raportti</div>
+        <div><span class="key">F9</span> Z-Raportti (Nollaus)</div>
+        <div><span class="key">F10</span> Maksa Lahjakortilla</div>
+        <div><span class="key">F11</span> Korttimaksu (Simulaatio)</div>
+        <div><span class="key">F12</span> Käteismaksu</div>
+        <div><span class="key">Nuolet Ylös/Alas</span> Liiku kuitilla</div>
+        <div><span class="key">DEL</span> Poista rivi</div>
+        <div><span class="key">ALT+P</span> Palautus kuittinumerolla</div>
+        <div><span class="key">ALT+G</span> Luo/Myy Lahjakortti</div>
+        <div><span class="key">ALT+S</span> Järjestelmäasetukset (On/Off)</div>
+    </footer>
+
+    <script>
+        // --- JÄRJESTELMÄN DATA (Tallennettaisiin pilveen, tässä localStoragessa) ---
+        let config = {
+            posId: "Kassa 1",
+            location: "Helsinki Päämyymälä",
+            cashInDrawer: 100.00,
+            vatRounding: true
+        };
+
+        let users = {
+            "1": { name: "Matti Myyjä", role: "user", rights: { changePrice: false, reports: false } },
+            "2": { name: "Anna Manageri", role: "manager", rights: { changePrice: true, reports: true } }
+        };
+
+        let products = {
+            "111": { barcode: "111", name: "Kahvi Paketti", price: 5.95, discount: 0 },
+            "222": { barcode: "222", name: "Maito 1L", price: 1.49, discount: 0 },
+            "333": { barcode: "333", name: "Suklaalevy", price: 3.20, discount: 10 }, // Valmis tuoteale
+            "KOMBO1": { barcode: "KOMBO1", name: "Kahvi + Suklaa kampanja", price: 7.50, isCombo: true }
+        };
+
+        let activeGiftCards = {
+            "999111222": 50.00
+        };
+
+        let salesHistory = [];
+
+        // --- KASSAN NYKYINEN TILA ---
+        let currentUser = null;
+        let cart = [];
+        let payments = [];
+        let selectedRowIndex = -1;
+        let cartDiscountPercent = 0;
+        let returnMode = false;
+        let returnReceiptId = null;
+        let predefinedQty = null;
+
+        // --- ALUSTUS ---
+        window.onload = function() {
+            loadFromCloud();
+            updateHeader();
+            renderCart();
+            initProductTable();
+            
+            // Lukitse fokusoituminen syöttöpuskuriin
+            const buffer = document.getElementById('buffer-input');
+            buffer.addEventListener('blur', () => setTimeout(() => buffer.focus(), 10));
+            
+            // Kuuntele näppäimistöä globalisti
+            window.addEventListener('keydown', handleKeyDown);
+        };
+
+        // --- PUSKURIN JA NÄPPÄIMISTÖN KÄSITTELY ---
+        function handleKeyDown(e) {
+            const buffer = document.getElementById('buffer-input');
+            const value = buffer.value.trim();
+
+            // Salli nuolinäppäimillä liikkuminen kuitilla ilman esteitä
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                moveSelection(1);
+                return;
+            }
+            if (e.key === "ArrowUp") {
+                e.preventDefault();
+                moveSelection(-1);
+                return;
+            }
+
+            // ENTER-painallus (Älykäs puskuri tulkitsee sisällön)
+            if (e.key === "Enter" && value !== "") {
+                e.preventDefault();
+                processBuffer(value);
+                buffer.value = "";
+                return;
+            }
+
+            // PIKANÄPPÄIMET
+            switch(e.key) {
+                case "F1": // Kirjaudu
+                    e.preventDefault();
+                    if(currentUser) {
+                        logoutUser();
+                    } else {
+                        processBuffer("LOGIN:" + value);
+                    }
+                    buffer.value = "";
+                    break;
+                case "F2": // Muuta kpl määrää valitulle riville tai aseta etukäteen
+                    e.preventDefault();
+                    if(value !== "" && !isNaN(value)) {
+                        predefinedQty = parseFloat(value);
+                        setBufferLabel("Määrä asetettu etukäteen: " + predefinedQty + " kpl");
+                    } else if (selectedRowIndex > -1) {
+                        let newQty = prompt("Syötä uusi kpl-määrä:"); // Huom: Tehty vaatimuksesta promptiksi, mutta estetty ulkopuoliset ikkunat inline-puskurilla suosituksena. Tehdään puskuripohjainen muutos ilman promptia:
+                        alert("Syötä määrä puskuriin ja paina F2");
+                    }
+                    if(selectedRowIndex > -1 && value !== "" && !isNaN(value)) {
+                        cart[selectedRowIndex].qty = parseFloat(value);
+                        predefinedQty = null;
+                        renderCart();
+                    }
+                    buffer.value = "";
+                    break;
+                case "F3": // Muuta yksikköhintaa
+                    e.preventDefault();
+                    if(!checkPermission('changePrice')) return;
+                    if(selectedRowIndex > -1 && value !== "" && !isNaN(value)) {
+                        cart[selectedRowIndex].price = parseFloat(value);
+                        renderCart();
+                    }
+                    buffer.value = "";
+                    break;
+                case "F4": // Rivi-ale
+                    e.preventDefault();
+                    if(selectedRowIndex > -1 && value !== "" && !isNaN(value)) {
+                        cart[selectedRowIndex].discount = parseFloat(value);
+                        renderCart();
+                    }
+                    buffer.value = "";
+                    break;
+                case "Delete": // Poista rivi
+                    e.preventDefault();
+                    if(selectedRowIndex > -1) {
+                        cart.splice(selectedRowIndex, 1);
+                        selectedRowIndex = Math.max(0, selectedRowIndex - 1);
+                        renderCart();
+                    }
+                    break;
+                case "F7": // Pohjakassa
+                    e.preventDefault();
+                    if(value !== "" && !isNaN(value)) {
+                        config.cashInDrawer = parseFloat(value);
+                        saveToCloud();
+                        alert("Pohjakassa asetettu: " + config.cashInDrawer + " €");
+                    }
+                    buffer.value = "";
+                    break;
+                case "F8": // X-raportti
+                    e.preventDefault();
+                    showReport(false);
+                    break;
+                case "F9": // Z-raportti
+                    e.preventDefault();
+                    if(!checkPermission('reports')) return;
+                    showReport(true);
+                    break;
+                case "F12": // Käteismaksu
+                    e.preventDefault();
+                    handlePayment("KÄTEINEN", value);
+                    buffer.value = "";
+                    break;
+                case "F11": // Korttimaksu
+                    e.preventDefault();
+                    handlePayment("KORTTI", value);
+                    buffer.value = "";
+                    break;
+                case "F10": // Lahjakorttimaksu
+                    e.preventDefault();
+                    handlePayment("LAHJAKORTTI", value);
+                    buffer.value = "";
+                    break;
+            }
+
+            // ALT+yhdistelmät
+            if (e.altKey && e.key.toLowerCase() === 'd') { // Kokoale
+                e.preventDefault();
+                if(value !== "" && !isNaN(value)) {
+                    cartDiscountPercent = parseFloat(value);
+                    renderCart();
+                }
+                buffer.value = "";
+            }
+            if (e.altKey && e.key.toLowerCase() === 's') { // Asetukset näkyviin / pois
+                e.preventDefault();
+                togglePanel('panel-products');
+                togglePanel('panel-users');
+            }
+            if (e.altKey && e.key.toLowerCase() === 'g') { // Luo Lahjakortti
+                e.preventDefault();
+                generateGiftCard(value);
+                buffer.value = "";
+            }
+            if (e.altKey && e.key.toLowerCase() === 'p') { // Palautustila kuittinumerolla
+                e.preventDefault();
+                if(value !== "") {
+                    triggerReturnMode(value);
+                }
+                buffer.value = "";
+            }
+        }
+
+        // --- ÄLYKÄS SYÖTTÖPUSKURI ---
+        function processBuffer(val) {
+            // Katso onko kyseessä pikakirjaus LOGIN numerolla
+            if(val.startsWith("LOGIN:")) {
+                let pin = val.split(":")[1];
+                if(users[pin]) {
+                    currentUser = users[pin];
+                    alert("Tervetuloa " + currentUser.name);
+                } else {
+                    alert("Myyjää ei löytynyt!");
+                }
+                updateHeader();
+                return;
+            }
+
+            if(!currentUser) {
+                alert("KIRJAUDU SISÄÄN ENTSIN (Syötä myyjänumero ja paina F1)");
+                return;
+            }
+
+            // Monikertasyöttö tunnistus (esim 5*123456)
+            let qty = 1;
+            let searchKey = val;
+            if(val.includes("*")) {
+                let parts = val.split("*");
+                qty = parseFloat(parts[0]);
+                searchKey = parts[1];
+            } else if (predefinedQty !== null) {
+                qty = predefinedQty;
+                predefinedQty = null;
+            }
+
+            // Etsi tuote viivakoodilla tai nimellä
+            let product = products[searchKey];
+            
+            if(product) {
+                addToCart(product, qty);
+            } else {
+                // Jos ei löytynyt tuotetta, katsotaan onko kyseessä vapaa hintasyöttö (esim summatilanne)
+                if(!isNaN(searchKey) && searchKey.includes(",")) searchKey = searchKey.replace(",", ".");
+                if(!isNaN(searchKey) && parseFloat(searchKey) > 0) {
+                    // Luodaan geneerinen tuoterivi vapaalla hinnalla
+                    let customProd = { barcode: "VAPAA", name: "Yleistuote", price: parseFloat(searchKey), discount: 0 };
+                    addToCart(customProd, qty);
+                } else {
+                    alert("Tunnistamaton syöte tai tuotetta ei löydy: " + searchKey);
+                }
+            }
+            setBufferLabel("Syöte (Viivakoodi / hinta / määrä / komento)");
+        }
+
+        // --- KASSATOIMINNOT / OSTOSKORI ---
+        function addToCart(product, qty) {
+            // Jos ollaan palautustilassa, käännetään kpl-määrä negatiiviseksi
+            if(returnMode) {
+                qty = -Math.abs(qty);
+            }
+
+            // Tarkistetaan onko tuote jo korissa (ja ei olla muuttamassa tiettyä riviä)
+            let existing = cart.find(item => item.barcode === product.barcode && item.price === product.price);
+            if(existing && !returnMode) {
+                existing.qty += qty;
+            } else {
+                cart.push({
+                    barcode: product.barcode,
+                    name: (returnMode ? "[PALAUTUS] " : "") + product.name,
+                    price: product.price,
+                    discount: product.discount,
+                    qty: qty
+                });
+            }
+            renderCart();
+            selectedRowIndex = cart.length - 1;
+            highlightSelectedRow();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('receipt-items');
+            container.innerHTML = "";
+            
+            let total = 0;
+
+            cart.forEach((item, index) => {
+                let rowPrice = item.price * (1 - item.discount / 100);
+                let rowTotal = rowPrice * item.qty;
+                total += rowTotal;
+
+                let row = document.createElement('div');
+                row.className = 'receipt-row';
+                if(index === selectedRowIndex) row.className += ' selected';
+                row.onclick = () => { selectedRowIndex = index; highlightSelectedRow(); };
+
+                row.innerHTML = `
+                    <div>${item.qty}</div>
+                    <div>${item.name}</div>
+                    <div>${item.price.toFixed(2)}</div>
+                    <div>${item.discount > 0 ? item.discount + '%' : '-'}</div>
+                    <div></div>
+                    <div>${rowTotal.toFixed(2)} €</div>
+                `;
+                container.appendChild(row);
+            });
+
+            // Koko ostoskorin alennus kampanjointiin
+            if(cartDiscountPercent > 0) {
+                total = total * (1 - cartDiscountPercent / 100);
+            }
+
+            // Suomen käteismaksun pyöristyssääntö (Yhteensä-summaan jos käteinen, lasketaan valmiiksi näkymään)
+            document.getElementById('disp-total').innerText = total.toFixed(2) + " €";
+            document.getElementById('disp-cart-discount').innerText = cartDiscountPercent;
+            
+            // Päivitä maksutiedot näkyviin jos osittaisia maksuja suoritettu
+            renderPayments(total);
+        }
+
+        function moveSelection(direction) {
+            if(cart.length === 0) return;
+            selectedRowIndex += direction;
+            if(selectedRowIndex < 0) selectedRowIndex = 0;
+            if(selectedRowIndex >= cart.length) selectedRowIndex = cart.length - 1;
+            highlightSelectedRow();
+        }
+
+        function highlightSelectedRow() {
+            let rows = document.querySelectorAll('.receipt-row');
+            rows.forEach((r, idx) => {
+                if(idx === selectedRowIndex) r.classList.add('selected');
+                else r.classList.remove('selected');
+            });
+        }
+
+        // --- MAKSAMINEN & SIMULAATIOT ---
+        function handlePayment(type, value) {
+            let totalDue = calculateCartTotal();
+            let paidSoFar = payments.reduce((acc, p) => acc + p.amount, 0);
+            let remaining = totalDue - paidSoFar;
+
+            if(remaining <= 0 && cart.length > 0) {
+                alert("Kuitti on jo maksettu kokonaan!");
+                return;
+            }
+
+            let amountToPay = value !== "" ? parseFloat(value.replace(",", ".")) : remaining;
+
+            if (type === "KÄTEINEN") {
+                // Käteissimulaatio ja pyöristys takaisinmaksuun
+                let finalCash = amountToPay;
+                if(amountToPay >= remaining) {
+                    // Jos maksetaan yli tai tasan loppusumma, pyöristetään loppusumma Suomen säännöillä lähimpään 5 snt
+                    let roundedRemaining = Math.round(remaining * 20) / 20;
+                    let change = finalCash - roundedRemaining;
+                    
+                    payments.push({ type: "KÄTEINEN", amount: roundedRemaining });
+                    alert("KÄTEISMAKSU HYVÄKSYTTY.\nMaksettu: " + finalCash.toFixed(2) + " €\nPyöristetty loppusumma: " + roundedRemaining.toFixed(2) + " €\nTakaisin: " + change.toFixed(2) + " €");
+                } else {
+                    payments.push({ type: "KÄTEINEN", amount: amountToPay });
+                }
+            } 
+            else if (type === "KORTTI") {
+                alert("YHDISTETÄÄN MAKSUPÄÄTTEESEEN...\nOtetaan vastaan korttimaksu summaltaan: " + amountToPay.toFixed(2) + " €\n[SIMULAATIO: VASTAANOTETTU ONNISTUNEESTI]");
+                payments.push({ type: "KORTTI", amount: amountToPay });
+            } 
+            else if (type === "LAHJAKORTTI") {
+                // Arvotaan tai syötetään lahjakorttikoodi puskurista
+                if(activeGiftCards[value] !== undefined) {
+                    let cardBalance = activeGiftCards[value];
+                    let useAmount = Math.min(cardBalance, amountToPay);
+                    activeGiftCards[value] -= useAmount;
+                    payments.push({ type: "LAHJAKORTTI (" + value + ")", amount: useAmount });
+                    alert("Lahjakorttia käytetty: " + useAmount.toFixed(2) + " €\nKortille jäi: " + activeGiftCards[value].toFixed(2) + " €");
+                } else {
+                    alert("Lahjakorttia koodilla '" + value + "' ei löydy tai se on tyhjä!");
+                    return;
+                }
+            }
+
+            renderCart();
+            checkReceiptStatus();
+        }
+
+        function calculateCartTotal() {
+            let total = cart.reduce((acc, item) => acc + (item.price * (1 - item.discount / 100) * item.qty), 0);
+            return total * (1 - cartDiscountPercent / 100);
+        }
+
+        function renderPayments(total) {
+            let paidSoFar = payments.reduce((acc, p) => acc + p.amount, 0);
+            let div = document.getElementById('disp-payments');
+            if(payments.length > 0) {
+                let html = "Suoritettu: <br>";
+                payments.forEach(p => { html += `- ${p.type}: ${p.amount.toFixed(2)} €<br>`; });
+                html += `Jäljellä: ${(total - paidSoFar).toFixed(2)} €`;
+                div.innerHTML = html;
+            } else {
+                div.innerHTML = "";
+            }
+        }
+
+        function checkReceiptStatus() {
+            let totalDue = calculateCartTotal();
+            let paidSoFar = payments.reduce((acc, p) => acc + p.amount, 0);
+
+            // Sallitaan kuitin päättäminen jos maksettu summa kattaa velvoituksen (huomioiden pyöristykset)
+            if (paidSoFar >= (totalDue - 0.02)) {
+                finalizeReceipt();
+            }
+        }
+
+        function finalizeReceipt() {
+            let receiptId = "REK-" + Math.floor(100000 + Math.random() * 900000);
+            let receiptData = {
+                id: receiptId,
+                timestamp: new Date().toLocaleString(),
+                user: currentUser.name,
+                items: [...cart],
+                payments: [...payments],
+                total: calculateCartTotal()
+            };
+
+            salesHistory.push(receiptData);
+            
+            // Kassalaatikon saldon päivitys käteisen osalta
+            payments.forEach(p => {
+                if(p.type === "KÄTEINEN") config.cashInDrawer += p.amount;
+            });
+
+            saveToCloud();
+            alert("KUITTI VALMIS & TALLENNETTU PILVEEN!\nKuittinumero: " + receiptId);
+            
+            // Nollaa kassa uutta asiakasta varten
+            cart = [];
+            payments = [];
+            cartDiscountPercent = 0;
+            returnMode = false;
+            selectedRowIndex = -1;
+            renderCart();
+        }
+
+        // --- LAHJAKORTTIEN GENEROINTI (VAIN NUMEROITA) ---
+        function generateGiftCard(value) {
+            if(value === "" || isNaN(value)) {
+                alert("Syötä puskuriin lahjakortin arvo (esim 50) ennen kuin painat ALT+G");
+                return;
+            }
+            let cardAmount = parseFloat(value);
+            // Generoidaan 9-numeroinen koodi ilman kirjaimia
+            let cardCode = Math.floor(100000000 + Math.random() * 900000000).toString();
+            activeGiftCards[cardCode] = cardAmount;
+            saveToCloud();
+            
+            alert("LAHJAKORTTI LUOTU JÄRJESTELMÄÄN\nKoodi: " + cardCode + "\nArvo: " + cardAmount + " €\nVoit käyttää tätä koodia suoraan maksutapana.");
+        }
+
+        // --- ÄLYKÄS PALAUTUS TOIMINTO ---
+        function triggerReturnMode(receiptId) {
+            let oldReceipt = salesHistory.find(r => r.id === receiptId);
+            if(oldReceipt) {
+                returnMode = true;
+                document.getElementById('info-mode').innerText = "PALAUTUSTILA (" + receiptId + ")";
+                document.getElementById('info-mode').style.color = "#ff4444";
+                
+                // Lataa vanhan kuitin tuotteet automaattisesti palautettaviksi kuitille (käänteisinä kappalemäärinä)
+                oldReceipt.items.forEach(item => {
+                    cart.push({
+                        barcode: item.barcode,
+                        name: "[PALAUTUS] " + item.name.replace("[PALAUTUS] ", ""),
+                        price: item.price,
+                        discount: item.discount,
+                        qty: -Math.abs(item.qty)
+                    });
+                });
+                renderCart();
+                alert("Kuitti ladattu palautettavaksi. Voit poistaa rivejä DEL-näppäimellä jos asiakas ei palauta kaikkea.");
+            } else {
+                alert("Kuittia ei löytynyt pilvestä!");
+            }
+        }
+
+        // --- RAPORTOINTI (X & Z) ---
+        function showReport(isZReport) {
+            let totalSales = 0;
+            let cashSales = 0;
+            let cardSales = 0;
+            let giftSales = 0;
+
+            salesHistory.forEach(r => {
+                totalSales += r.total;
+                r.payments.forEach(p => {
+                    if(p.type.includes("KÄTEINEN")) cashSales += p.amount;
+                    if(p.type.includes("KORTTI")) cardSales += p.amount;
+                    if(p.type.includes("LAHJAKORTTI")) giftSales += p.amount;
+                });
+            });
+
+            let reportHtml = `
+===================================
+        ${isZReport ? 'Z-RAPORTTI (NOLLAUS)' : 'X-RAPORTTI (TILANNE)'}
+===================================
+Aika: ${new Date().toLocaleString()}
+Kassa: ${config.posId} | Sijainti: ${config.location}
+Myyjä: ${currentUser ? currentUser.name : 'Ei kukaan'}
+
+KOKONAISMYYNTI: ${totalSales.toFixed(2)} €
+- Käteinen:    ${cashSales.toFixed(2)} €
+- Kortti:      ${cardSales.toFixed(2)} €
+- Lahjakortit: ${giftSales.toFixed(2)} €
+
+KASSALAATIKON NYKYINEN KÄTEINEN:
+${config.cashInDrawer.toFixed(2)} € (sis. pohjakassan)
+===================================
+            `;
+
+            const panel = document.getElementById('panel-report');
+            document.getElementById('report-text').innerText = reportHtml;
+            panel.classList.remove('hidden');
+
+            if(isZReport) {
+                // Nollataan myyntihistoria järjestelmästä
+                salesHistory = [];
+                saveToCloud();
+                alert("Z-Raportti ajettu onnistuneesti. Myynnit nollattu pilvestä.");
+            }
+        }
+
+        // --- APUFUNKTIOT JA PILVITALLENNUS (`localStorage`) ---
+        function setBufferLabel(text) {
+            document.getElementById('buffer-type').innerText = text;
+        }
+
+        function updateHeader() {
+            if(currentUser) {
+                document.getElementById('info-user').innerText = `${currentUser.name} (${currentUser.role.toUpperCase()})`;
+            } else {
+                document.getElementById('info-user').innerText = "Kirjaudu sisään syöttämällä Myyjä ID (1 tai 2) + F1";
+            }
+            document.getElementById('info-pos').innerText = config.posId;
+            document.getElementById('info-loc').innerText = config.location;
+        }
+
+        function logoutUser() {
+            alert(`Myyjä ${currentUser.name} kirjattu ulos.`);
+            currentUser = null;
+            updateHeader();
+        }
+
+        function checkPermission(action) {
+            if(!currentUser) {
+                alert("Kirjaudu ensin sisään!");
+                return false;
+            }
+            if(currentUser.role === 'manager') return true; // Managerilla aina oikeudet
+            if(currentUser.rights && currentUser.rights[action]) return true;
+            
+            alert(`VIRHE: Käyttäjätasollasi (${currentUser.role}) ei ole oikeutta toimintoon: ${action}`);
+            return false;
+        }
+
+        function togglePanel(id) {
+            const el = document.getElementById(id);
+            if(el.classList.contains('hidden')) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        function initProductTable() {
+            const tbody = document.querySelector('#table-products tbody');
+            tbody.innerHTML = "";
+            Object.values(products).forEach(p => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `<td>${p.barcode}</td><td>${p.name}</td><td>${p.price.toFixed(2)} €</td><td>${p.discount}%</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Pilvitallennuksen simulaatio paikallismuistiin (Kaikki kassat voivat lukea saman datan selaimessa)
+        function saveToCloud() {
+            localStorage.setItem('prokassa_config', JSON.stringify(config));
+            localStorage.setItem('prokassa_sales', JSON.stringify(salesHistory));
+            localStorage.setItem('prokassa_giftcards', JSON.stringify(activeGiftCards));
+        }
+
+        function loadFromCloud() {
+            if(localStorage.getItem('prokassa_config')) {
+                config = JSON.parse(localStorage.getItem('prokassa_config'));
+                salesHistory = JSON.parse(localStorage.getItem('prokassa_sales') || '[]');
+                activeGiftCards = JSON.parse(localStorage.getItem('prokassa_giftcards') || '{}');
+            }
+        }
+    </script>
+</body>
+</html>
